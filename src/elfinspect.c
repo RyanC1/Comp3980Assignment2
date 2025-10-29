@@ -186,7 +186,7 @@ static p101_fsm_state_t parse_arguments(const struct p101_env *env, struct p101_
         }
     }
 
-    if(p101_error_has_no_error(err))
+    if(p101_error_has_no_error(err) && next_state != USAGE)
     {
         if(context->arguments->argc - optind != EXPECTED_ARGS)
         {
@@ -300,15 +300,8 @@ static p101_fsm_state_t send_file(const struct p101_env *env, struct p101_error 
     P101_TRACE(env);
     context = (struct context *)ctx;
 
-    if(safe_write_line(context->socket_fd, context->arguments->elf_path, strlen(context->arguments->elf_path)) == -1)
-    {
-        puts("Notice: Failed to send full path name");
-    }
-
-    if(copy(context->elf_fd, context->socket_fd) == -1)
-    {
-        puts("Notice: Failed to send full elf data");
-    }
+    safe_write_line(context->socket_fd, context->arguments->elf_path, strlen(context->arguments->elf_path));
+    copy(context->elf_fd, context->socket_fd);
 
     if(socket_close)
     {
@@ -335,7 +328,7 @@ static p101_fsm_state_t receive_details(const struct p101_env *env, struct p101_
     context = (struct context *)ctx;
     p101_memset(env, msg, 0, sizeof(msg));
 
-    read = safe_read(context->socket_fd, msg, sizeof(msg), true);
+    read = safe_read(context->socket_fd, msg, sizeof(msg), false);
     if(read == sizeof(msg))
     {
         puts("Response too long!");
@@ -344,9 +337,11 @@ static p101_fsm_state_t receive_details(const struct p101_env *env, struct p101_
     {
         puts("Could not parse response");
     }
-
-    puts("Server Response:");
-    puts(msg);
+    else
+    {
+        puts("Server Response:");
+        puts(msg);
+    }
 
     return CLEANUP;
 }

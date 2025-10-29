@@ -246,7 +246,7 @@ static p101_fsm_state_t parse_arguments(const struct p101_env *env, struct p101_
         }
     }
 
-    if(p101_error_has_no_error(err))
+    if(p101_error_has_no_error(err) && next_state != USAGE)
     {
         if(optind >= context->arguments->argc)
         {
@@ -254,7 +254,7 @@ static p101_fsm_state_t parse_arguments(const struct p101_env *env, struct p101_
         }
         else if(optind < context->arguments->argc - 1)
         {
-            P101_ERROR_RAISE_USER(err, "To many Arguments", ERRD_USAGE);
+            P101_ERROR_RAISE_USER(err, "Too many arguments", ERRD_USAGE);
         }
         else
         {
@@ -435,8 +435,8 @@ static p101_fsm_state_t verify_elf_header(const struct p101_env *env, struct p10
 {
     struct contextd *context;
     elf_ident        ident;
-    uint64_t         type;
-    uint64_t         machine;
+    uint16_t         type;
+    uint16_t         machine;
     uint64_t         entry;
     char             address[MAX_ELF_ADDRESS_CHARS];
 

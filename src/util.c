@@ -23,7 +23,7 @@ ssize_t safe_read(const int fd, void *buf, const size_t count, bool exact)
         }
         else if(n == -1 && errno != EINTR)
         {
-            if(errno == EAGAIN && !exact && total > 0)
+            if((errno == EAGAIN || !exact) && total > 0)
             {
                 return (ssize_t)total;
             }
@@ -57,7 +57,7 @@ ssize_t safe_read_line(const int fd, void *buf, const size_t count, bool exact)
         }
         if(n == -1 && errno != EINTR)
         {
-            if(errno == EAGAIN && exact && total > 0)
+            if((errno == EAGAIN || !exact) && total > 0)
             {
                 return (ssize_t)total;
             }
@@ -158,8 +158,8 @@ void byte_swap(void *buf, const int size)
     for(int i = 0; i < size / 2; i++)
     {
         memcpy(tmp, p + i, 1);
-        memcpy(p + size - 1 - i, p + i, 1);
-        memcpy(p + i, tmp, 1);
+        memcpy(p + i, p + size - 1 - i, 1);
+        memcpy(p + size - 1 - i, tmp, 1);
     }
 }
 
