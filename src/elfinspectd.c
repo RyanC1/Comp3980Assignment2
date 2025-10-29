@@ -5,7 +5,7 @@
 #include "elf_ident.h"
 #include "elf_validator.h"
 #include "errorsd.h"
-#include "utild.h"
+#include "util.h"
 #include <ctype.h>
 #include <p101_c/p101_stdlib.h>
 #include <p101_c/p101_string.h>
@@ -31,6 +31,13 @@ enum states
     RESPOND,
     CLEANUP_RESPONSE,
     CLEANUP_PROGRAM,
+};
+
+struct verification_set
+{
+    int (*verifier)(uint64_t, char *);
+    const uint64_t input;
+    char         **buf;
 };
 
 static volatile sig_atomic_t exit_flag    = 0;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
@@ -114,7 +121,7 @@ int main(int argc, char *argv[])
         {PARSE_REQUEST,     CLEANUP_PROGRAM,   cleanup_program  },
         {PARSE_REQUEST,     RESPOND,           respond          },
         {PARSE_REQUEST,     VERIFY_ELF_HEADER, verify_elf_header},
-        {VERIFY_ELF_HEADER, RESPOND,           verify_elf_header},
+        {VERIFY_ELF_HEADER, RESPOND,           respond          },
         {RESPOND,           CLEANUP_RESPONSE,  cleanup_response },
         {CLEANUP_RESPONSE,  WAIT_FOR_REQUEST,  wait_for_request },
         {CLEANUP_RESPONSE,  CLEANUP_PROGRAM,   cleanup_program  },
@@ -173,10 +180,6 @@ int main(int argc, char *argv[])
     ctx.exit_code       = EXIT_SUCCESS;
 
     fsm = p101_fsm_info_create(env, err, "elf-inspect-d-fsm", fsm_env, fsm_err, NULL);
-
-    p101_fsm_info_set_bad_change_state_notifier(fsm, p101_fsm_info_default_bad_change_state_notifier);
-    // p101_fsm_info_set_will_change_state_notifier(fsm, p101_fsm_info_default_will_change_state_notifier);
-    p101_fsm_info_set_did_change_state_notifier(fsm, p101_fsm_info_default_did_change_state_notifier);
 
     p101_fsm_run(fsm, &from_state, &to_state, &ctx, transitions, sizeof(transitions));
     p101_fsm_info_destroy(env, &fsm);
@@ -364,9 +367,13 @@ static p101_fsm_state_t parse_request(const struct p101_env *env, struct p101_er
     readName = safe_read_line(context->request_fd, name, sizeof(name), true);
     readData = safe_read(context->request_fd, data, sizeof(data), true);
 
-    if(readName == -1 || name[readName] != '\n')
+    if(readName == -1)
     {
         P101_ERROR_RAISE_USER(err, "Bad request: Unparsable file name", ERRD_REQUEST);
+    }
+    else if(name[readName - 1] != '\n')
+    {
+        P101_ERROR_RAISE_USER(err, "Bad request: Too long/no termination for file name", ERRD_REQUEST);
     }
     else if(readData == -1)
     {
@@ -416,7 +423,7 @@ static p101_fsm_state_t parse_request(const struct p101_env *env, struct p101_er
     {
         next_state = RESPOND;
     }
-    if(p101_error_has_error(err))
+    else if(p101_error_has_error(err))
     {
         next_state = CLEANUP_PROGRAM;
     }
@@ -464,21 +471,25 @@ static p101_fsm_state_t verify_elf_header(const struct p101_env *env, struct p10
     }
     else
     {
-        struct verification_pair pairs[] = {
-            {verify_class,   ident.ei_class  },
-            {verify_data,    ident.ei_data   },
-            {verify_version, ident.ei_version},
-            {verify_type,    type            },
-            {verify_machine, machine         }
+        struct verification_set sets[] = {
+            {verify_class,   ident.ei_class,   &context->elf_details.class_name  },
+            {verify_data,    ident.ei_data,    &context->elf_details.data_name   },
+            {verify_version, ident.ei_version, NULL                              },
+            {verify_type,    type,             &context->elf_details.type_name   },
+            {verify_machine, machine,          &context->elf_details.machine_name},
         };
 
-        for(size_t i = 0; i < sizeof(pairs) / sizeof(pairs[0]); i++)
+        for(size_t i = 0; i < sizeof(sets) / sizeof(sets[0]); i++)
         {
             char msg[MAX_VALIDATION_MSG];
-            if(pairs[i].verifier(pairs[i].input, msg) == -1)
+            if(sets[i].verifier(sets[i].input, msg) == -1)
             {
                 P101_ERROR_RAISE_USER(err, msg, ERRD_ELF);
                 break;
+            }
+            if(sets[i].buf != NULL)
+            {
+                *sets[i].buf = p101_strdup(env, err, msg);
             }
         }
     }
@@ -505,7 +516,7 @@ static p101_fsm_state_t respond(const struct p101_env *env, struct p101_error *e
     else if(p101_error_is_error(err, P101_ERROR_USER, ERRD_ELF))
     {
         char msg[RESPONSE_MSG_LEN];
-        snprintf(msg, sizeof(msg), "File: %s\nValid ELF: no\nError: %s\n", context->elf_details.file_name, p101_error_get_message(err));
+        snprintf(msg, sizeof(msg), "File: %sValid ELF: no\nError: %s\n", context->elf_details.file_name, p101_error_get_message(err));
         safe_write(context->request_fd, msg, p101_strlen(env, msg));
     }
     else
@@ -513,7 +524,7 @@ static p101_fsm_state_t respond(const struct p101_env *env, struct p101_error *e
         char msg[RESPONSE_MSG_LEN];
         snprintf(msg,
                  sizeof(msg),
-                 "File: %s\nValid ELF: yes\nClass: %s\nEndianness: %s\nType: %s\nMachine: %s\nEntry point: %s",
+                 "File: %sValid ELF: yes\nClass: %s\nEndianness: %s\nType: %s\nMachine: %s\nEntry point: %s",
                  context->elf_details.file_name,
                  context->elf_details.class_name,
                  context->elf_details.data_name,
@@ -564,6 +575,7 @@ static p101_fsm_state_t cleanup_response(const struct p101_env *env, struct p101
     p101_memset(env, &context->elf_details, 0, sizeof(context->elf_details));
 
     p101_close(env, err, context->request_fd);
+    context->request_fd = 0;
 
     if(p101_error_has_error(err))
     {

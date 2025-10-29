@@ -257,12 +257,6 @@ enum machine {
     EM_AIECTRLCODE = 269,
 };
 
-struct verification_pair
-{
-    int (*verifier)(uint64_t, char *);
-    const uint64_t input;
-};
-
 int verify_magic(const uint8_t * magic, char *buf);
 int verify_class(uint64_t class, char *buf);
 int verify_data(uint64_t data, char *buf);

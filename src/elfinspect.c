@@ -125,10 +125,6 @@ int main(int argc, char *argv[])
 
     fsm = p101_fsm_info_create(env, err, "elf-inspect-fsm", fsm_env, fsm_err, NULL);
 
-    p101_fsm_info_set_bad_change_state_notifier(fsm, p101_fsm_info_default_bad_change_state_notifier);
-    // p101_fsm_info_set_will_change_state_notifier(fsm, p101_fsm_info_default_will_change_state_notifier);
-    p101_fsm_info_set_did_change_state_notifier(fsm, p101_fsm_info_default_did_change_state_notifier);
-
     p101_fsm_run(fsm, &from_state, &to_state, &ctx, transitions, sizeof(transitions));
     p101_fsm_info_destroy(env, &fsm);
 
@@ -257,7 +253,7 @@ static p101_fsm_state_t handle_arguments(const struct p101_env *env, struct p101
         }
     }
 
-    if(p101_error_has_no_error(err))
+    if(p101_error_has_error(err))
     {
         next_state = USAGE;
     }
@@ -304,12 +300,12 @@ static p101_fsm_state_t send_file(const struct p101_env *env, struct p101_error 
     P101_TRACE(env);
     context = (struct context *)ctx;
 
-    if(safe_write(context->socket_fd, context->arguments->elf_path, strlen(context->arguments->elf_path)) == -1)
+    if(safe_write_line(context->socket_fd, context->arguments->elf_path, strlen(context->arguments->elf_path)) == -1)
     {
         puts("Notice: Failed to send full path name");
     }
 
-    if(copy(context->elf_fd, context->socket_fd))
+    if(copy(context->elf_fd, context->socket_fd) == -1)
     {
         puts("Notice: Failed to send full elf data");
     }
@@ -339,7 +335,6 @@ static p101_fsm_state_t receive_details(const struct p101_env *env, struct p101_
     context = (struct context *)ctx;
     p101_memset(env, msg, 0, sizeof(msg));
 
-    puts("reading");
     read = safe_read(context->socket_fd, msg, sizeof(msg), true);
     if(read == sizeof(msg))
     {

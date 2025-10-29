@@ -1,6 +1,7 @@
 #include "../include/util.h"
 #include <errno.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
 
@@ -46,9 +47,13 @@ ssize_t safe_read_line(const int fd, void *buf, const size_t count, bool exact)
     do
     {
         n = read(fd, p + total, 1);
-        if(n == 1 && p[total++] == '\n')
+        if(n == 1)
         {
-            break;
+            total++;
+            if(p[total - 1] == '\n')
+            {
+                break;
+            }
         }
         if(n == -1 && errno != EINTR)
         {
@@ -103,7 +108,7 @@ ssize_t safe_write_line(int fd, const void *buf, size_t n)
 
     written = safe_write(fd, buf, n);
 
-    if(written == -1 || safe_write(fd, "\n", 1))
+    if(written == -1 || safe_write(fd, "\n", 1) == -1)
     {
         return -1;
     }
