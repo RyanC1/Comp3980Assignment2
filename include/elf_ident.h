@@ -4,18 +4,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-
-#ifdef __cplusplus
-extern "C"
+enum
 {
-#endif
-
-enum {
-    ELF_IDENT_MAGIC_LEN       = 4,
-    ELF_IDENT_PADDING_LEN     = 7,
+    ELF_IDENT_MAGIC_LEN   = 4,
+    ELF_IDENT_PADDING_LEN = 7,
 };
 
-#define ELF_IDENT_LEN 16 // NOLINT(cppcoreguidelines-macro-to-enum,modernize-macro-to-enum)
+#define ELF_IDENT_LEN 16    // NOLINT(cppcoreguidelines-macro-to-enum,modernize-macro-to-enum)
 
 typedef struct
 {
@@ -29,11 +24,11 @@ typedef struct
 } elf_ident;
 
 #ifdef __cplusplus
-#define C_STATIC_ASSERT(cond, msg) static_assert(cond, msg)
-#define C_ALIGNOF(T) alignof(T)
+    #define C_STATIC_ASSERT(cond, msg) static_assert(cond, msg)
+    #define C_ALIGNOF(T) alignof(T)
 #else
-#define C_STATIC_ASSERT(cond, msg) _Static_assert(cond, msg)
-#define C_ALIGNOF(T) _Alignof(T)
+    #define C_STATIC_ASSERT(cond, msg) _Static_assert(cond, msg)
+    #define C_ALIGNOF(T) _Alignof(T)
 #endif
 
 C_STATIC_ASSERT(sizeof(elf_ident) == ELF_IDENT_LEN, "elf_ident size mismatch, expected 16");
@@ -49,9 +44,4 @@ C_STATIC_ASSERT(offsetof(elf_ident, ei_pad[0]) == 9, "elf_ident pad bad offset")
 #undef C_STATIC_ASSERT
 #undef C_ALIGNOF
 
-#ifdef __cplusplus
-    extern "C"
-    }
-#endif
-
-#endif // ELF_IDENT_H
+#endif    // ELF_IDENT_H

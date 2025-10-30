@@ -423,7 +423,8 @@ foreach (_exe IN LISTS EXECUTABLE_TARGETS)
     _p101_abs_list(_srcs_abs ${${_exe}_SOURCES})
     list(APPEND _ALL_SOURCES_FOR_FORMAT ${_srcs_abs})
 
-    add_executable(${_exe} ${_srcs_abs})
+    add_executable(${_exe} ${_srcs_abs}
+            include/verification_set.h)
 
     # Project includes as normal (-I)
     if (P101_PROJECT_INC_DIR)

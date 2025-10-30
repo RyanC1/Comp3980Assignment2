@@ -6,6 +6,7 @@
 #include "elf_validator.h"
 #include "errorsd.h"
 #include "util.h"
+#include "verification_set.h"
 #include <ctype.h>
 #include <p101_c/p101_stdlib.h>
 #include <p101_c/p101_string.h>
@@ -31,13 +32,6 @@ enum states
     RESPOND,
     CLEANUP_RESPONSE,
     CLEANUP_PROGRAM,
-};
-
-struct verification_set
-{
-    int (*verifier)(uint64_t, char *);
-    const uint64_t input;
-    char         **buf;
 };
 
 static volatile sig_atomic_t exit_flag    = 0;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
@@ -118,7 +112,6 @@ int main(int argc, char *argv[])
         {USAGE,             CLEANUP_PROGRAM,   cleanup_program  },
         {WAIT_FOR_REQUEST,  CLEANUP_PROGRAM,   cleanup_program  },
         {WAIT_FOR_REQUEST,  PARSE_REQUEST,     parse_request    },
-        {PARSE_REQUEST,     CLEANUP_PROGRAM,   cleanup_program  },
         {PARSE_REQUEST,     RESPOND,           respond          },
         {PARSE_REQUEST,     VERIFY_ELF_HEADER, verify_elf_header},
         {VERIFY_ELF_HEADER, RESPOND,           respond          },
@@ -285,7 +278,7 @@ static p101_fsm_state_t handle_arguments(const struct p101_env *env, struct p101
     socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if(socket_fd == -1)
     {
-        P101_ERROR_RAISE_USER(err, "Failed to create socket", ERRD_USAGE);
+        P101_ERROR_RAISE_USER(err, "Failed to create socket", ERRD_SOCKET);
     }
     else
     {
@@ -299,7 +292,7 @@ static p101_fsm_state_t handle_arguments(const struct p101_env *env, struct p101
         }
         else if(bind(socket_fd, (struct sockaddr *)&addr, sizeof addr) == -1)
         {
-            P101_ERROR_RAISE_USER(err, "Failed to bind socket", ERRD_SOCKET);
+            P101_ERROR_RAISE_USER(err, "Failed to bind socket", ERRD_USAGE);
         }
         else if(listen(context->socket_fd, SOCK_QUEUE) == -1)
         {
@@ -422,10 +415,6 @@ static p101_fsm_state_t parse_request(const struct p101_env *env, struct p101_er
     if(p101_error_is_error(err, P101_ERROR_USER, ERRD_REQUEST) || p101_error_is_error(err, P101_ERROR_USER, ERRD_ELF))
     {
         next_state = RESPOND;
-    }
-    else if(p101_error_has_error(err))
-    {
-        next_state = CLEANUP_PROGRAM;
     }
 
     return next_state;
